@@ -10,10 +10,14 @@ from sklearn import ensemble
 from sklearn.preprocessing import RobustScaler, StandardScaler
 from xgboost.sklearn import XGBClassifier, XGBRegressor
 import pickle
+import argparse
+import logging
+
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 
-def data_process(train_data, inference_data, feature_columns, treatment_columns_category, treatment_columns_common,
-                 outcome_column, treatment_columns_continuous):
+def data_process(train_data, inference_data, feature_columns, treatment_columns_category, outcome_column):
     # 众数 补充缺失值
     train = pd.concat([train_data, inference_data])
     train = train[feature_columns]
@@ -52,7 +56,9 @@ def data_process(train_data, inference_data, feature_columns, treatment_columns_
 
 
 def inference(train, treatment_columns_category_dict, xgb, feature_columns,
-              treatment_columns_category, treatment_columns_common, outcome_column, treatment_columns_continuous):
+              treatment_columns_category, treatment_columns_common, treatment_change_value,
+              treatment_columns_continuous,
+              userid_column):
     outcome_pd = pd.DataFrame()
     outcome_pd['outcome'] = xgb.predict(train[feature_columns])
     result = dict()
@@ -127,7 +133,7 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
     temp_pd = outcome_pd[[i for i in treatment_columns_category + list(
         treatment_columns_continuous.keys()) if i not in treatment_columns_common]]
     outcome_pd['max_idx'] = temp_pd.idxmax(axis=1)
-    outcome_pd["user_id"] = train[user_id_column].values
+    outcome_pd["user_id"] = train[userid_column].values
 
     user_res = dict()
     outcome_pd_cols = outcome_pd.columns.to_list()
@@ -149,34 +155,72 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
     return result
 
 
-train = pd.read_csv('train.csv')
-train = train[['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
-               'V_10', 'treatment', 'outcome']]
-train['user_id'] = train.index
+# mock data
+# train = pd.read_csv('train.csv')
+# train = train[['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
+#                'V_10', 'treatment', 'outcome']]
+# train['user_id'] = train.index
+#
+# feature_columns = ['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
+#                    'V_10', 'treatment']
+# # treatment_columns_continuous=['V_6', 'V_7']
+# treatment_columns_category = ['V_10', 'treatment']
+# treatment_columns_common = ['V_6', 'treatment']
+# treatment_change_value = 0.2
+# outcome_column = ["outcome"]
+# user_id_column = ["user_id"]
+# treatment_columns_continuous = {
+#     "V_6": [None, 10, 1],
+#     "V_7": [0.3, None, 0]
+# }
+# train_data = train[0:30000]
+# inference_data = train[30000:]
+# treatment_columns_category_dict, inference_data, xgb = data_process(train_data, inference_data, feature_columns,
+#                                                                     treatment_columns_category,
+#                                                                     treatment_columns_common,
+#                                                                     outcome_column, treatment_columns_continuous)
+# m = inference(inference_data, treatment_columns_category_dict, xgb, feature_columns,
+#               treatment_columns_category, treatment_columns_common, outcome_column, treatment_columns_continuous)
+#
 
-feature_columns = ['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
-                   'V_10', 'treatment']
-# treatment_columns_continuous=['V_6', 'V_7']
-treatment_columns_category = ['V_10', 'treatment']
-treatment_columns_common = ['V_6', 'treatment']
-treatment_change_value = 0.2
 
-outcome_column = ["outcome"]
-user_id_column = ["user_id"]
-treatment_columns_continuous = {
-    "V_6": [None, 10, 1],
-    "V_7": [0.3, None, 0]
-}
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train_data_path', type=str, default="train_data.csv", help="训练文件路径")
+    parser.add_argument('--inference_data_path', type=str, default="inference_data.csv", help="推理文件路径")
+    parser.add_argument('--feature_columns', type=str, default="", help="所有的特征list")
+    parser.add_argument('--treatment_columns_category', type=str, default="", help="枚举值的treatment，list")
+    parser.add_argument('--treatment_columns_continuous', type=str, default="", help="连续值的treatment，dict")
+    parser.add_argument('--treatment_columns_common', type=str, default="", help="预先定义的treatment，list")
+    parser.add_argument('--outcome_column', type=str, default="", help="标签列名，list")
+    parser.add_argument('--userid_column', type=str, default="user_id", help="userid列名，list")
+    args = parser.parse_args()
 
-train_data = train[0:30000]
-inference_data = train[30000:]
+    try:
+        train_data_path = args.train_data_path
+        inference_data_path = args.inference_data_path
+        feature_columns = eval(args.feature_columns)
+        treatment_columns_category = eval(args.treatment_columns_category)
+        treatment_columns_continuous = eval(args.treatment_columns_continuous)
+        treatment_columns_common = eval(args.treatment_columns_common)
+        outcome_column = eval(args.outcome_column)
+        userid_column = eval(args.userid_column)
+        treatment_change_value = 0.2
 
-treatment_columns_category_dict, inference_data, xgb = data_process(train_data, inference_data, feature_columns,
-                                                                    treatment_columns_category,
-                                                                    treatment_columns_common,
-                                                                    outcome_column, treatment_columns_continuous)
+        train_data = pd.read_csv(train_data_path)
+        inference_data = pd.read_csv(inference_data_path)
+        treatment_columns_category_dict, inference_data, xgb = data_process(train_data, inference_data, feature_columns,
+                                                                            treatment_columns_category,
+                                                                            outcome_column)
+        result = inference(inference_data, treatment_columns_category_dict, xgb, feature_columns,
+                           treatment_columns_category, treatment_columns_common, treatment_change_value,
+                           treatment_columns_continuous,
+                           userid_column)
+        logging.info("\n\n**********")
+        logging.info("final result file is : causal_inference.pkl")
 
-m = inference(inference_data, treatment_columns_category_dict, xgb, feature_columns,
-              treatment_columns_category, treatment_columns_common, outcome_column, treatment_columns_continuous)
+    except:
+        logging.warning('\n\n****something wrong****')
 
-print(m)
+## example
+#  python casual_inference_miaosuan.py --feature_columns "['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9','V_10', 'treatment']" --treatment_columns_category "['V_10', 'treatment']" --treatment_columns_continuous "{'V_6': [None, 10, 1],'V_7': [0.3, None, 0]}" --treatment_columns_common "['V_6','treatment']" --outcome_column "['outcome']" --userid_column "['user_id']"
