@@ -355,15 +355,26 @@ if __name__ == "__main__":
         inference_data_path = parameters["inference_data_path"]
         feature_columns = parameters["feature_columns"]
         treatment_columns_category = parameters["treatment_columns_category"]
-        treatment_columns_continuous = parameters["treatment_columns_continuous"]
+        treatment_columns_continuous_temp = parameters["treatment_columns_continuous"]
         treatment_columns_common = parameters["treatment_columns_common"]
         outcome_column = parameters["outcome_column"]
         userid_column = parameters["userid_column"]
 
+        treatment_columns_continuous = {}
+
+        for continuous_temp in treatment_columns_continuous_temp:
+            temp_list = [continuous_temp["min_value"], continuous_temp["max_value"],
+                         continuous_temp["neg_correlation_boolean"]]
+            treatment_columns_continuous[continuous_temp["field_name"]] = temp_list
+
         treatment_change_value = 0.2
 
-        train_data = pd.read_csv(train_data_path)
-        inference_data = pd.read_csv(inference_data_path)
+        if train_data_path.endswith("csv"):
+            train_data = pd.read_csv(train_data_path)
+            inference_data = pd.read_csv(inference_data_path)
+        else:
+            train_data = pd.read_excel(train_data_path)
+            inference_data = pd.read_excel(inference_data_path)
         treatment_columns_category_dict, inference_data, xgb, train_data = data_process(train_data, inference_data,
                                                                                         feature_columns,
                                                                                         treatment_columns_category,
