@@ -1,18 +1,10 @@
 import pandas as pd
 import numpy as np
-import torch
-import torch.nn as nn
+import traceback, sys
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler, LabelEncoder
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-import math
-from catboost import CatBoostRegressor
-from sklearn import ensemble
-from sklearn.preprocessing import RobustScaler, StandardScaler
 from xgboost.sklearn import XGBClassifier, XGBRegressor
 from causalml.metrics.visualize import plot_lift, plot_qini, plot_gain, plot_tmlegain, auuc_score, qini_score, \
     get_tmlegain
-from causalml.propensity import ElasticNetPropensityModel
-import pickle
 import argparse
 import logging
 import json
@@ -25,10 +17,6 @@ logging.basicConfig(filename='casual_inference_miaosuan.log.txt',
 
 logging.info("Running Urban Planning")
 logger = logging.getLogger('urbanGUI')
-
-
-# LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-# logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 
 
 def data_process(train_data, inference_data, feature_columns, treatment_columns_category, outcome_column):
@@ -64,14 +52,6 @@ def data_process(train_data, inference_data, feature_columns, treatment_columns_
     xgb = XGBRegressor()
     xgb.fit(train_data[feature_columns], train_data[outcome_column])
 
-    # def get_auuc(xgb, train_data, treatment_columns_category_dict, treatment_columns_category, treatment_column,
-    #              outcome_column):
-    #     for i in treatment_columns_category:
-    #         _keys = list(treatment_columns_category_dict[i].keys())
-    #         for i_value in _keys:
-    #             train_temp = train_data.copy(deep=True)
-    #             train_temp[i+str(i_value)] =i_value
-
     inference_data["outcome1"] = xgb.predict(inference_data[feature_columns])
 
     return treatment_columns_category_dict, inference_data, xgb, train_data
@@ -92,70 +72,17 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             treatment_cont_common.append(col)
         else:
             train_temp = train.copy(deep=True)
+            _a = limit_value[0] if limit_value[0] is not None else -np.inf
+            _b = limit_value[1] if limit_value[1] is not None else np.inf
             if limit_value[2] == 0:
-                if limit_value[0] is not None:
-                    train_temp[col] = train_temp[col].apply(
-                        lambda x: x * (1 - treatment_change_value) if x * (1 - treatment_change_value) > limit_value[
-                            0] else x)
-                if limit_value[1] is not None:
-                    train_temp[col] = train_temp[col].apply(
-                        lambda x: x * (1 - treatment_change_value) if x * (1 - treatment_change_value) < limit_value[
-                            1] else x)
-                if limit_value[0] is None and limit_value[1] is None:
-                    train_temp[col] = train_temp[col].apply(lambda x: x * (1 - treatment_change_value))
-
+                train_temp[col] = train_temp[col].apply(
+                    lambda x: x * (1 - treatment_change_value) if _a < x * (1 - treatment_change_value) < _b else x)
             if limit_value[2] == 1:
-                if limit_value[0] is not None:
-                    train_temp[col] = train_temp[col].apply(
-                        lambda x: x * (1 + treatment_change_value) if x * (1 + treatment_change_value) > limit_value[
-                            0] else x)
-                if limit_value[1] is not None:
-                    train_temp[col] = train_temp[col].apply(
-                        lambda x: x * (1 + treatment_change_value) if x * (1 + treatment_change_value) < limit_value[
-                            1] else x)
-                if limit_value[0] is None and limit_value[1] is None:
-                    train_temp[col] = train_temp[col].apply(lambda x: x * (1 + treatment_change_value))
+                train_temp[col] = train_temp[col].apply(
+                    lambda x: x * (1 + treatment_change_value) if _a < x * (1 + treatment_change_value) < _b else x)
+
             outcome_pd[col] = xgb.predict(train_temp[feature_columns])
     result["treatment_cont_common"] = treatment_cont_common
-
-    # 基于类别型变量的处理
-    # treatment_cate_common = dict()
-    # for col in treatment_columns_category:
-    #     train_temp = train.copy(deep=True)
-    #     if col in treatment_columns_common:
-    #         pd_category = pd.DataFrame()
-    #         logging.info("{} is category 变量，在common中 ".format(col))
-    #         treat_enum = treatment_columns_category_dict[col]
-    #         logging.info(treat_enum)
-    #         for enum_value in treat_enum.keys():
-    #             logging.info(enum_value)
-    #             train_temp[col] = enum_value
-    #             pd_category[enum_value] = xgb.predict(
-    #                 train_temp[feature_columns])
-    #         d = dict(pd_category.mean())
-    #         d = sorted(d.items(), key=lambda x: x[1], reverse=True)[0][0]
-    #         treatment_cate_common[col] = treat_enum[d]
-    #         logging.info("\n\n")
-    #     else:
-    #         pd_category = pd.DataFrame()
-    #         logging.info("{} is category 变量，不在common中 ".format(col))
-    #         treat_enum = treatment_columns_category_dict[col]
-    #         logging.info(treat_enum)
-    #         for enum_value in treat_enum.keys():
-    #             logging.info(enum_value)
-    #             train_temp[col] = enum_value
-    #             pd_category[enum_value] = xgb.predict(
-    #                 train_temp[feature_columns])
-    #         logging.info("\n\n")
-    #         cate_max = pd_category.max(axis=1)
-    #         cate_idxmax = pd_category.idxmax(axis=1)
-    #         pd_category[col] = cate_max
-    #         pd_category[col + "_idx"] = cate_idxmax
-    #
-    #         outcome_pd[col] = cate_max
-    #         outcome_pd[col + "_idx"] = cate_idxmax
-    #
-    # result["treatment_cate_common"] = treatment_cate_common
 
     treatment_cate_common = []
     for col in treatment_columns_category:
@@ -197,8 +124,16 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
 
     result["treatment_cate_common"] = treatment_cate_common
 
-    temp_pd = outcome_pd[[i for i in treatment_columns_category + list(
-        treatment_columns_continuous.keys()) if i not in treatment_columns_common]]
+    treat_cols = [i for i in treatment_columns_category + list(
+        treatment_columns_continuous.keys()) if i not in treatment_columns_common]
+
+    if len(treat_cols) == 0:
+        logging.info("None feature need treatment!!!!")
+        return None, None
+
+    logging.info("feature need treatment ： {}".format(str(treat_cols)))
+
+    temp_pd = outcome_pd[treat_cols]
     outcome_pd['max_idx'] = temp_pd.idxmax(axis=1)
     outcome_pd["user_id"] = train[userid_column].values
 
@@ -319,30 +254,10 @@ def auuc_output(train_data, feature_columns, outcome_column, treatment_columns_c
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--train_data_path', type=str, default="train_data.csv", help="训练文件路径")
-    # parser.add_argument('--inference_data_path', type=str, default="inference_data.csv", help="推理文件路径")
-    # parser.add_argument('--feature_columns', type=str, default="", help="所有的特征list")
-    # parser.add_argument('--treatment_columns_category', type=str, default="", help="枚举值的treatment，list")
-    # parser.add_argument('--treatment_columns_continuous', type=str, default="", help="连续值的treatment，dict")
-    # parser.add_argument('--treatment_columns_common', type=str, default="", help="预先定义的treatment，list")
-    # parser.add_argument('--outcome_column', type=str, default="", help="标签列名，list")
-    # parser.add_argument('--userid_column', type=str, default="user_id", help="userid列名，list")
-    # parser.add_argument('--target_data_path', type=str, default="causal_inference.json", help="目标文件路径")
-
     parser.add_argument('--parameters_data_path', type=str, default="parameters.json", help="参数文件路径")
     args = parser.parse_args()
 
     try:
-        # train_data_path = args.train_data_path
-        # inference_data_path = args.inference_data_path
-        # feature_columns = eval(args.feature_columns)
-        # treatment_columns_category = eval(args.treatment_columns_category)
-        # treatment_columns_continuous = eval(args.treatment_columns_continuous)
-        # treatment_columns_common = eval(args.treatment_columns_common)
-        # outcome_column = eval(args.outcome_column)
-        # userid_column = eval(args.userid_column)
-        # target_data_path = args.target_data_path
-
         logging.info("********start casual inference ************")
         parameters_path = args.parameters_data_path
         logging.info("input path is : " + parameters_path)
@@ -390,8 +305,12 @@ if __name__ == "__main__":
         logging.info(f"final result file is : {target_data_path}")
         logging.info("**********\n\n\n\n")
 
-    except:
-        logging.info("\n\n****something wrong****")
+
+    except Exception as e:
+        logging.error("error detail is :{}, {} ".format(e.__class__.__name__, e))
+        # exc_type, exc_value, exc_traceback = sys.exc_info()
+        logging.error(str(traceback.print_exc()))
+        logging.error("****something wrong****\n\n\n")
 
 ## example
 #  python casual_inference_miaosuan.py --feature_columns "['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9','V_10', 'treatment']" --treatment_columns_category "['V_10', 'treatment']" --treatment_columns_continuous "{'V_6': [None, 10, 1],'V_7': [0.3, None, 0]}" --treatment_columns_common "['V_6','treatment']" --outcome_column "['outcome']" --userid_column "['user_id']"
