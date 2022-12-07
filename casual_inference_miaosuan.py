@@ -285,8 +285,8 @@ if __name__ == "__main__":
         treatment_change_value = 0.2
 
         if train_data_path.endswith("csv"):
-            train_data = pd.read_csv(train_data_path)
-            inference_data = pd.read_csv(inference_data_path)
+            train_data = pd.read_csv(train_data_path, error_bad_lines=False)
+            inference_data = pd.read_csv(inference_data_path, error_bad_lines=False)
         else:
             train_data = pd.read_excel(train_data_path)
             inference_data = pd.read_excel(inference_data_path)
