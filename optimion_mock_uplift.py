@@ -37,9 +37,6 @@ def generate_data():
     return outcome, costs
 
 
-outcome, costs = generate_data()
-
-
 def optimization_define(outcome, costs, red_limit=10, red_packet=[0, 2, 5]):
     num_workers = len(costs)
     num_tasks = len(costs[0])
@@ -80,6 +77,8 @@ def optimization_define(outcome, costs, red_limit=10, red_packet=[0, 2, 5]):
         print('No solution found.')
 
 
-red_limit = 10
-red_packet = [0, 2, 5]
-optimization_define(outcome, costs, red_limit, red_packet)
+if __name__ == "__main__":
+    red_limit = 100
+    red_packet = [0, 6, 10]
+    outcome, costs = generate_data()
+    optimization_define(outcome, costs, red_limit, red_packet)

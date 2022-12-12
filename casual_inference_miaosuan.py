@@ -84,6 +84,7 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             outcome_pd[col] = xgb.predict(train_temp[feature_columns])
     result["treatment_cont_common"] = treatment_cont_common
 
+
     treatment_cate_common = []
     for col in treatment_columns_category:
         train_temp = train.copy(deep=True)
@@ -136,19 +137,6 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
     temp_pd = outcome_pd[treat_cols]
     outcome_pd['max_idx'] = temp_pd.idxmax(axis=1)
     outcome_pd["user_id"] = train[userid_column].values
-
-    # user_res = dict()
-    # outcome_pd_cols = outcome_pd.columns.to_list()
-    # for key, value in outcome_pd.iterrows():
-    #     max_idx = value["max_idx"]
-    #     if max_idx + "_idx" in outcome_pd_cols:
-    #         temp = dict()
-    #         temp[max_idx] = value[max_idx + "_idx"]
-    #         user_res[value["user_id"]] = temp
-    #     else:
-    #         user_res[value["user_id"]] = max_idx
-    # #     logging.info(max_idx)
-    # result["user_treatment"] = user_res
 
     user_res = []
     outcome_pd_cols = outcome_pd.columns.to_list()
@@ -223,34 +211,6 @@ def auuc_output(train_data, feature_columns, outcome_column, treatment_columns_c
         logging.info("\n\n****something wrong about auuc_output****")
 
 
-# mock data
-# train = pd.read_csv('train.csv')
-# train = train[['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
-#                'V_10', 'treatment', 'outcome']]
-# train['user_id'] = train.index
-#
-# feature_columns = ['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9',
-#                    'V_10', 'treatment']
-# # treatment_columns_continuous=['V_6', 'V_7']
-# treatment_columns_category = ['V_10', 'treatment']
-# treatment_columns_common = ['V_6', 'treatment']
-# treatment_change_value = 0.2
-# outcome_column = ["outcome"]
-# user_id_column = ["user_id"]
-# treatment_columns_continuous = {
-#     "V_6": [None, 10, 1],
-#     "V_7": [0.3, None, 0]
-# }
-# train_data = train[0:30000]
-# inference_data = train[30000:]
-# treatment_columns_category_dict, inference_data, xgb = data_process(train_data, inference_data, feature_columns,
-#                                                                     treatment_columns_category,
-#                                                                     treatment_columns_common,
-#                                                                     outcome_column, treatment_columns_continuous)
-# m = inference(inference_data, treatment_columns_category_dict, xgb, feature_columns,
-#               treatment_columns_category, treatment_columns_common, outcome_column, treatment_columns_continuous)
-#
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -312,5 +272,4 @@ if __name__ == "__main__":
         logging.error(str(traceback.print_exc()))
         logging.error("****something wrong****\n\n\n")
 
-## example
-#  python casual_inference_miaosuan.py --feature_columns "['V_0', 'V_1', 'V_2', 'V_3', 'V_4', 'V_5', 'V_6', 'V_7', 'V_8', 'V_9','V_10', 'treatment']" --treatment_columns_category "['V_10', 'treatment']" --treatment_columns_continuous "{'V_6': [None, 10, 1],'V_7': [0.3, None, 0]}" --treatment_columns_common "['V_6','treatment']" --outcome_column "['outcome']" --userid_column "['user_id']"
+
