@@ -8,18 +8,21 @@ from causalml.metrics.visualize import plot_lift, plot_qini, plot_gain, plot_tml
 import argparse
 import logging
 import json
+import copy
+from util import linear_dml
 
 logging.basicConfig(filename='casual_inference_miaosuan.log.txt',
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%D:%H:%M:%S',
                     level=logging.DEBUG)
-
+logging.info("\n\n\n")
 logging.info("Running Urban Planning")
 logger = logging.getLogger('urbanGUI')
 
 
-def data_process(train_data, inference_data, feature_columns, treatment_columns_category, outcome_column):
+def data_process(train_data, inference_data, feature_columns, treatment_columns_category, outcome_column,
+                 treatment_columns_continuous):
     # 众数 补充缺失值
     train = pd.concat([train_data, inference_data])
     train = train[feature_columns]
@@ -49,20 +52,42 @@ def data_process(train_data, inference_data, feature_columns, treatment_columns_
             train_data[col] = label_encoder.transform(train_data[col])
             inference_data[col] = label_encoder.transform(inference_data[col])
 
-    xgb = XGBRegressor()
-    xgb.fit(train_data[feature_columns], train_data[outcome_column])
+    dml_estimators = dict()
+    for _t in treatment_columns_category:
+        temp_feature_columns = copy.deepcopy(feature_columns)
+        temp_feature_columns.remove(_t)
+        x = train_data[temp_feature_columns].values
+        t = train_data[_t].values
+        y = train_data[outcome_column[0]].values
+        logger.info(
+            "start train category dml models: x columns is :{}, treatment columns is :{},outcome column is :{}".format(str(temp_feature_columns), _t, str(outcome_column)))
+        est = linear_dml(x=x, t=t, y=y, discrete=True, grid_search=True)
+        dml_estimators[_t] = est
 
-    inference_data["outcome1"] = xgb.predict(inference_data[feature_columns])
+    for _t in treatment_columns_continuous.keys():
+        temp_feature_columns = copy.deepcopy(feature_columns)
+        temp_feature_columns.remove(_t)
+        x = train_data[temp_feature_columns].values
+        t = train_data[_t].values
+        y = train_data[outcome_column[0]].values
+        logger.info(
+            "start train continuous dml models: x columns is :{}, treatment columns is :{},outcome column is :{} ".format(str(temp_feature_columns), _t, str(outcome_column)))
+        est = linear_dml(x=x, t=t, y=y, discrete=False, grid_search=True)
+        dml_estimators[_t] = est
 
-    return treatment_columns_category_dict, inference_data, xgb, train_data
+    # xgb = XGBRegressor()
+    # xgb.fit(train_data[feature_columns], train_data[outcome_column])
+    # inference_data["outcome1"] = xgb.predict(inference_data[feature_columns])
+
+    return treatment_columns_category_dict, inference_data, dml_estimators, train_data
 
 
-def inference(train, treatment_columns_category_dict, xgb, feature_columns,
+def inference(train, treatment_columns_category_dict, dml_estimators, feature_columns,
               treatment_columns_category, treatment_columns_common, treatment_change_value,
               treatment_columns_continuous,
               userid_column, target_data_path):
     outcome_pd = pd.DataFrame()
-    outcome_pd['outcome'] = xgb.predict(train[feature_columns])
+    # outcome_pd['outcome'] = xgb.predict(train[feature_columns])
     result = dict()
 
     # 基于连续型变量的处理
@@ -72,21 +97,35 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             treatment_cont_common.append(col)
         else:
             train_temp = train.copy(deep=True)
+            t0 = train_temp[col].values
             _a = limit_value[0] if limit_value[0] is not None else -np.inf
             _b = limit_value[1] if limit_value[1] is not None else np.inf
             if limit_value[2] == 0:
-                train_temp[col] = train_temp[col].apply(
-                    lambda x: x * (1 - treatment_change_value) if _a < x * (1 - treatment_change_value) < _b else x)
+                t1 = train_temp[col].apply(
+                    lambda x: x * (1 - treatment_change_value) if _a < x * (
+                            1 - treatment_change_value) < _b else x).values
             if limit_value[2] == 1:
-                train_temp[col] = train_temp[col].apply(
-                    lambda x: x * (1 + treatment_change_value) if _a < x * (1 + treatment_change_value) < _b else x)
+                t1 = train_temp[col].apply(
+                    lambda x: x * (1 + treatment_change_value) if _a < x * (
+                            1 + treatment_change_value) < _b else x).values
+            temp_feature_columns = copy.deepcopy(feature_columns)
+            temp_feature_columns.remove(col)
+            x = train_temp[temp_feature_columns].values
+            est = dml_estimators[col]
+            effect = est.effect(X=x, T0=t0, T1=t1)
+            outcome_pd[col] = effect
+            logging.info("{} treatment之后， ate为：{} ".format(col, np.mean(effect)))
 
-            outcome_pd[col] = xgb.predict(train_temp[feature_columns])
     result["treatment_cont_common"] = treatment_cont_common
-
     treatment_cate_common = []
     for col in treatment_columns_category:
         train_temp = train.copy(deep=True)
+
+        temp_feature_columns = copy.deepcopy(feature_columns)
+        temp_feature_columns.remove(col)
+        est = dml_estimators[col]
+        x = train_temp[temp_feature_columns].values
+
         if col in treatment_columns_common:
             pd_category = pd.DataFrame()
             logging.info("{} is category 变量，在common中 ".format(col))
@@ -94,8 +133,9 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             logging.info(treat_enum)
             for enum_value in treat_enum.keys():
                 logging.info(enum_value)
-                train_temp[col] = enum_value
-                pd_category[enum_value] = xgb.predict(train_temp[feature_columns])
+                effect = est.effect(X=x, T0=0, T1=enum_value)
+                pd_category[enum_value] = effect
+                logging.info("{} treatment之后, enum_value : {}， ate为：{} ".format(col, enum_value, np.mean(effect)))
             d = dict(pd_category.mean())
             d = sorted(d.items(), key=lambda x: x[1], reverse=True)[0][0]
             _temp_dict = dict()
@@ -111,8 +151,10 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             logging.info(treat_enum)
             for enum_value in treat_enum.keys():
                 logging.info(enum_value)
-                train_temp[col] = enum_value
-                pd_category[enum_value] = xgb.predict(train_temp[feature_columns])
+                effect = est.effect(X=x, T0=0, T1=enum_value)
+                pd_category[enum_value] = effect
+                logging.info("{} treatment之后, enum_value : {}， ate为：{} ".format(col, enum_value, np.mean(effect)))
+
             logging.info("\n\n")
             cate_max = pd_category.max(axis=1)
             cate_idxmax = pd_category.idxmax(axis=1)
@@ -194,7 +236,7 @@ def auuc_output(train_data, feature_columns, outcome_column, treatment_columns_c
                 temp_data = train_data.copy(deep=True)
                 temp_data[i] = j
                 auuc_pd[str(i) + "_" + str(j)
-                        ] = xgb.predict(temp_data[feature_columns])
+                        ] = dml_estimators.predict(temp_data[feature_columns])
                 if j != 0:
                     auuc_pd[str(i_values[j]) + "--" + str(i_values[0])
                             ] = auuc_pd[str(i) + "_" + str(j)] - auuc_pd[str(i) + "_" + str(0)]
@@ -248,14 +290,16 @@ if __name__ == "__main__":
         else:
             train_data = pd.read_excel(train_data_path)
             inference_data = pd.read_excel(inference_data_path)
-        treatment_columns_category_dict, inference_data, xgb, train_data = data_process(train_data, inference_data,
-                                                                                        feature_columns,
-                                                                                        treatment_columns_category,
-                                                                                        outcome_column)
+        treatment_columns_category_dict, inference_data, dml_estimators, train_data = data_process(train_data,
+                                                                                                   inference_data,
+                                                                                                   feature_columns,
+                                                                                                   treatment_columns_category,
+                                                                                                   outcome_column,
+                                                                                                   treatment_columns_continuous)
 
         auuc_output(train_data, feature_columns, outcome_column, treatment_columns_category_dict)
 
-        result, outcome_dp = inference(inference_data, treatment_columns_category_dict, xgb, feature_columns,
+        result, outcome_dp = inference(inference_data, treatment_columns_category_dict, dml_estimators, feature_columns,
                                        treatment_columns_category, treatment_columns_common, treatment_change_value,
                                        treatment_columns_continuous,
                                        userid_column, target_data_path)
