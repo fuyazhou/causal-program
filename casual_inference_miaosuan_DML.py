@@ -11,7 +11,7 @@ import json
 import copy
 from util import linear_dml
 
-logging.basicConfig(filename='casual_inference_miaosuan.log.txt',
+logging.basicConfig(filename='casual_inference_miaosuan.log',
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%D:%H:%M:%S',
@@ -60,8 +60,9 @@ def data_process(train_data, inference_data, feature_columns, treatment_columns_
         t = train_data[_t].values
         y = train_data[outcome_column[0]].values
         logger.info(
-            "start train category dml models: x columns is :{}, treatment columns is :{},outcome column is :{}".format(str(temp_feature_columns), _t, str(outcome_column)))
-        est = linear_dml(x=x, t=t, y=y, discrete=True, grid_search=True)
+            "start train category dml models: x columns is :{}, treatment columns is :{},outcome column is :{}".format(
+                str(temp_feature_columns), _t, str(outcome_column)))
+        est = linear_dml(x=x, t=t, y=y, discrete=True, grid_search=False)
         dml_estimators[_t] = est
 
     for _t in treatment_columns_continuous.keys():
@@ -71,8 +72,9 @@ def data_process(train_data, inference_data, feature_columns, treatment_columns_
         t = train_data[_t].values
         y = train_data[outcome_column[0]].values
         logger.info(
-            "start train continuous dml models: x columns is :{}, treatment columns is :{},outcome column is :{} ".format(str(temp_feature_columns), _t, str(outcome_column)))
-        est = linear_dml(x=x, t=t, y=y, discrete=False, grid_search=True)
+            "start train continuous dml models: x columns is :{}, treatment columns is :{},outcome column is :{} ".format(
+                str(temp_feature_columns), _t, str(outcome_column)))
+        est = linear_dml(x=x, t=t, y=y, discrete=False, grid_search=False)
         dml_estimators[_t] = est
 
     # xgb = XGBRegressor()
@@ -152,7 +154,7 @@ def inference(train, treatment_columns_category_dict, dml_estimators, feature_co
             for enum_value in treat_enum.keys():
                 logging.info(enum_value)
                 effect = est.effect(X=x, T0=0, T1=enum_value)
-                pd_category[enum_value] = effect
+                pd_category[treat_enum[enum_value]] = effect
                 logging.info("{} treatment之后, enum_value : {}， ate为：{} ".format(col, enum_value, np.mean(effect)))
 
             logging.info("\n\n")

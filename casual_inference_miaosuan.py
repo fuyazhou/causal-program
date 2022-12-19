@@ -112,7 +112,7 @@ def inference(train, treatment_columns_category_dict, xgb, feature_columns,
             for enum_value in treat_enum.keys():
                 logging.info(enum_value)
                 train_temp[col] = enum_value
-                pd_category[enum_value] = xgb.predict(train_temp[feature_columns])
+                pd_category[treat_enum[enum_value]] = xgb.predict(train_temp[feature_columns])
             logging.info("\n\n")
             cate_max = pd_category.max(axis=1)
             cate_idxmax = pd_category.idxmax(axis=1)
