@@ -14,19 +14,22 @@ from util import linear_dml
 logging.basicConfig(filename='casual_inference_miaosuan.log',
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                    datefmt='%D:%H:%M:%S',
+                    datefmt='%D--%H:%M:%S',
                     level=logging.DEBUG)
 logging.info("\n\n\n")
 logging.info("Running Urban Planning")
-logger = logging.getLogger('urbanGUI')
+logger = logging.getLogger('urbanGUI : ')
 
 
 def data_process(train_data, inference_data, feature_columns, treatment_columns_category, outcome_column,
                  treatment_columns_continuous):
+    train_data.dropna(subset=[outcome_column[0]], inplace=True)
     # 众数 补充缺失值
     train = pd.concat([train_data, inference_data])
     train = train[feature_columns]
     for col in feature_columns:
+        if train[col].isnull().all():
+            train[col].fillna(0)
         d = dict(train[col].value_counts())
         train[col] = train[col].fillna(sorted(d.items(), key=lambda x: x[1], reverse=True)[0][0])
 

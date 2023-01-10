@@ -67,7 +67,7 @@ d = {}
 for i in range(39):
     d[cols[i]] = model.estimate_total_effect(train[cols], i, 41)
 
-get_ipython().run_line_magic('pinfo2', 'model.estimate_total_effect')
+# get_ipython().run_line_magic('pinfo2', 'model.estimate_total_effect')
 
 d2 = {}
 for i in range(39):

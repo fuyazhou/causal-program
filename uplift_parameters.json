@@ -1,0 +1,27 @@
+{
+    "train_data_path":"D://workspace/data/optimion_train_data.csv",
+    "inference_data_path":"D://workspace/data/optimion_test_data.csv",
+    "target_data_path":"D://workspace/data/optimion_target_data.json",
+    "outcome_column":[
+        "Revenue"
+    ],
+    "userid_column":[
+        "UID"
+    ],
+    "feature_columns":[
+        "Global Flag",
+        "Major Flag",
+        "SMC Flag",
+        "Commercial Flag",
+        "IT Spend",
+        "Employee Count",
+        "PC Count",
+        "Size",
+        "treatment"
+    ],
+    "treatment_columns_category":[
+        "treatment"
+    ],
+    "coupon_limit": 100
+
+}

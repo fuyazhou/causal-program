@@ -11,14 +11,14 @@ from xgboost.sklearn import XGBClassifier, XGBRegressor
 from econml.sklearn_extensions.model_selection import GridSearchCVList
 import logging
 
-logging.basicConfig(filename='casual_inference_miaosuan.log.txt',
+logging.basicConfig(filename='casual_inference_miaosuan.log',
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                    datefmt='%D:%H:%M:%S',
+                    datefmt='%D--%H:%M:%S',
                     level=logging.DEBUG)
 
 logging.info("Running Urban Planning")
-logger = logging.getLogger('urbanGUI')
+logger = logging.getLogger('urbanGUI : ')
 
 
 def grid_search_reg():
