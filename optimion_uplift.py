@@ -147,7 +147,9 @@ def optimization_define(outcome, costs, red_limit, red_packet, userid_column):
     for worker in range(num_workers):
         for task in range(num_tasks):
             all_red.append(int(outcome[worker][task] * 100) * red_packet[task] * x[worker, task])  # *100是因为该求解器值支持整数
-    model.Add(sum(all_red) <= (red_limit * 100))  # 限制条件也乘以100
+            # all_red.append(red_packet[task] * x[worker, task])  # *100是因为该求解器值支持整数
+    model.Add(sum(all_red) <= int(red_limit * 100))  # 限制条件也乘以100
+    # model.Add(sum(all_red) <= int(red_limit))  # 限制条件也乘以100  only support integer
 
     objective_terms = []
     for worker in range(num_workers):
@@ -169,8 +171,9 @@ def optimization_define(outcome, costs, red_limit, red_packet, userid_column):
                     result_temp["user_id"] = index2id[worker]
                     result_temp["treatment"] = red_packet[task]
                     result.append(result_temp)
-                    logger.info(f'Worker {index2id[worker]} assigned to task {task}.' +
-                                f' Cost = {costs[worker][task]}')
+                    if worker < 20:
+                        logger.info(f'Worker {index2id[worker]} assigned to task {task}.' +
+                                    f' Cost = {costs[worker][task]}')
     else:
         logger.warning('No solution found.')
     logger.info("\n\n")
@@ -233,7 +236,28 @@ if __name__ == "__main__":
 
         # auuc_output(train_data, feature_columns, outcome_column, treatment_columns_category_dict)
 
-        result = optimization_define(treatment_probability, pd_uplift, coupon_limit, coupon_list, userid_column)
+        # 分块计算，运筹优化的时间复杂度是指数上升的
+        result = []
+        bath_size = 19998  # 分块的大小，随机拍的
+        # bath_size = 99  # 分块的大小，随机拍的
+        epoch = int(len(pd_uplift) / bath_size) + 1
+        logger.info(f"optimization bath_size = {bath_size}, epoch = {epoch}")
+        for i in range(0, epoch):
+            m = i * bath_size
+            n = (i + 1) * bath_size
+            if i == epoch - 1:
+                n = len(pd_uplift)
+                if (n - m) == 0:
+                    continue
+            logger.info(f"start sub chunk {m}  --  {n}")
+            sub_result = optimization_define(treatment_probability[m:n], pd_uplift[m:n], coupon_limit / epoch,
+                                             coupon_list, userid_column)
+            result.extend(sub_result)
+
+        # 不分块计算
+        # result = optimization_define(treatment_probability, pd_uplift, coupon_limit, coupon_list, userid_column)
+
+        logger.info(f"totally hava {len(result)} workers was treatmented")
 
         with open(target_data_path, "w", encoding="utf8") as tf:
             json.dump(result, tf, ensure_ascii=False, indent=2, cls=NpEncoder)
