@@ -1,0 +1,26 @@
+{
+    "train_data_path": "9a393fe92d1trainDataPath1671529474571.csv",
+    "inference_data_path": "9a393fe92d1ite1671529474571.csv",
+    "target_data_path": "9a393fe92d1targetDataPath1671529474571.json",
+    "outcome_column": [
+        "C"
+    ],
+    "userid_column": [
+        "UID"
+    ],
+    "feature_columns": [
+        "A",
+        "B页面点击次（A越大B越小）",
+        "D"
+    ],
+    "treatment_columns_common": [],
+    "treatment_columns_category": [],
+    "treatment_columns_continuous": [
+        {
+            "field_name": "A",
+            "min_value": 104.0,
+            "max_value": 197.0,
+            "neg_correlation_boolean": 1
+        }
+    ]
+}

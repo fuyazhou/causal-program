@@ -6,3 +6,4 @@ econml==0.14.0
 lightgbm==3.3.2
 xgboost==1.6.1
 causalml==0.12.3
+ortools==9.4.1874
